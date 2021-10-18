@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"os"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -15,21 +16,28 @@ import (
 // https://serverless.com/framework/docs/providers/aws/events/apigateway/#lambda-proxy-integration
 type Event events.KafkaEvent
 
-// Handler is our lambda handler invoked by the `lambda.Start` function call
-func Handler(ctx context.Context, event Event) error {
-	if len(event.Records) == 0 {
-		return errors.New("no MSK message passed to function")
-	}
-
-	for _, records := range event.Records {
-		for _, record := range records {
-			log.Printf("Test TOPIC: %s", record.Topic)
+func Handler(export *PostgresExporter) func(ctx context.Context, event Event) error {
+	return func(ctx context.Context, event Event) error {
+		if len(event.Records) == 0 {
+			return errors.New("no MSK message passed to function")
 		}
-	}
 
-	return nil
+		for _, records := range event.Records {
+			for _, record := range records {
+				log.Printf("Test TOPIC: %s", record.Topic)
+				export.Export(DatabaseRecord{})
+			}
+		}
+
+		return nil
+	}
 }
 
 func main() {
-	lambda.Start(Handler)
+	exporter, err := NewPostgresExporter(os.Getenv("POSTGRES_CONNECTION"))
+	if err != nil {
+		panic(err)
+	}
+
+	lambda.Start(Handler(exporter))
 }
